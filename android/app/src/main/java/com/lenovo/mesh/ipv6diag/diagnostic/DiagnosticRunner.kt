@@ -13,6 +13,7 @@ import com.lenovo.mesh.ipv6diag.data.model.TestResult
 import com.lenovo.mesh.ipv6diag.data.model.TestStatus
 import com.lenovo.mesh.ipv6diag.data.model.TestType
 import com.lenovo.mesh.ipv6diag.data.repository.SessionRepository
+import com.lenovo.mesh.ipv6diag.data.model.XlatDiagnosticSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -21,7 +22,7 @@ import java.net.InetAddress
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
-enum class TestFilter { ALL, HTTP_HTTPS, ICMP, DNS }
+enum class TestFilter { ALL, HTTP_HTTPS, ICMP, DNS, XLAT_464 }
 
 class DiagnosticRunner(
     private val context: Context,
@@ -69,12 +70,16 @@ class DiagnosticRunner(
             val ipv6Addr = resolveAddress(endpoint.hostname, isIPv6 = true)
 
             // Run selected test types
-            val testTypes = when (filter) {
-                TestFilter.ALL -> TestType.entries.toList()
+            val runXlat = filter == TestFilter.XLAT_464 ||
+                (filter == TestFilter.ALL && networkInfo.clatPresent)
+            val baseTypes = when (filter) {
+                TestFilter.ALL -> listOf(TestType.HTTP, TestType.HTTPS, TestType.ICMP, TestType.DNS)
                 TestFilter.HTTP_HTTPS -> listOf(TestType.HTTP, TestType.HTTPS)
                 TestFilter.ICMP -> listOf(TestType.ICMP)
                 TestFilter.DNS -> listOf(TestType.DNS)
+                TestFilter.XLAT_464 -> emptyList()
             }
+            val testTypes = baseTypes
 
             for (testType in testTypes) {
                 if (networkChanged.get()) break
@@ -93,6 +98,8 @@ class DiagnosticRunner(
                         if (ipv6Addr != null) add(runIcmpTest(sessionId, ipv6Addr, AddressFamily.IPv6))
                     }
                     TestType.DNS -> runDnsTests(context, network, sessionId, endpoint.hostname)
+                    TestType.NAT64_DISCOVERY, TestType.DNS64_VALIDATION,
+                    TestType.CLAT_QUALITY, TestType.PLAT_VERIFICATION -> emptyList()
                 }
 
                 if (networkChanged.get()) {
@@ -106,6 +113,20 @@ class DiagnosticRunner(
                 allResults.addAll(results)
             }
 
+            // Run 464XLAT sub-tests if requested
+            var xlatSummary: XlatDiagnosticSummary? = null
+            if (runXlat && !networkChanged.get()) {
+                xlatSummary = runXlatDiagnostics(
+                    context = context,
+                    network = network,
+                    networkInfo = networkInfo,
+                    sessionId = sessionId,
+                    serverIPv4 = ipv4Addr,
+                    serverIPv6 = ipv6Addr,
+                    serverPort = endpoint.httpPort,
+                )
+            }
+
             val status = if (networkChanged.get()) SessionStatus.ABORTED else SessionStatus.COMPLETED
             val session = DiagnosticSession(
                 id = sessionId,
@@ -117,6 +138,7 @@ class DiagnosticRunner(
                 abortReason = if (networkChanged.get()) "network changed during test" else null,
             )
             repository.saveSession(session)
+            xlatSummary?.let { repository.saveXlatSummary(it) }
             session
         } finally {
             runCatching { cm.unregisterNetworkCallback(changeCallback) }

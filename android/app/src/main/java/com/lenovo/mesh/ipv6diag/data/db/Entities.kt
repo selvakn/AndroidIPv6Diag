@@ -13,6 +13,8 @@ import com.lenovo.mesh.ipv6diag.data.model.SessionStatus
 import com.lenovo.mesh.ipv6diag.data.model.TestResult
 import com.lenovo.mesh.ipv6diag.data.model.TestStatus
 import com.lenovo.mesh.ipv6diag.data.model.TestType
+import com.lenovo.mesh.ipv6diag.data.model.XlatChainStatus
+import com.lenovo.mesh.ipv6diag.data.model.XlatDiagnosticSummary
 import kotlinx.serialization.json.Json
 
 private val json = Json { ignoreUnknownKeys = true }
@@ -108,6 +110,29 @@ data class TestResultEntity(
         timestamp = timestamp,
     )
 }
+
+@Entity(
+    tableName = "xlat_summaries",
+    foreignKeys = [ForeignKey(
+        entity = DiagnosticSessionEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["session_id"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+)
+data class XlatSummaryEntity(
+    @PrimaryKey @ColumnInfo(name = "session_id") val sessionId: String,
+    @ColumnInfo(name = "summary_json") val summaryJson: String,
+    @ColumnInfo(name = "overall_status") val overallStatus: String,
+) {
+    fun toModel(): XlatDiagnosticSummary = json.decodeFromString(XlatDiagnosticSummary.serializer(), summaryJson)
+}
+
+fun XlatDiagnosticSummary.toEntity() = XlatSummaryEntity(
+    sessionId = sessionId,
+    summaryJson = json.encodeToString(XlatDiagnosticSummary.serializer(), this),
+    overallStatus = overallStatus.name,
+)
 
 fun TestResult.toEntity() = TestResultEntity(
     id = id,
