@@ -2,7 +2,7 @@ package com.lenovo.mesh.ipv6diag.data.model
 
 import kotlinx.serialization.Serializable
 
-enum class TestType { HTTP, HTTPS, ICMP, DNS }
+enum class TestType { HTTP, HTTPS, ICMP, DNS, NAT64_DISCOVERY, DNS64_VALIDATION, CLAT_QUALITY, PLAT_VERIFICATION }
 
 enum class AddressFamily { IPv4, IPv6, XLAT }
 

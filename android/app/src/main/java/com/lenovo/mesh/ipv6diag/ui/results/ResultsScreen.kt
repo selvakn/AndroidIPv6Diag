@@ -18,7 +18,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +44,9 @@ import com.lenovo.mesh.ipv6diag.IPv6DiagApplication
 import com.lenovo.mesh.ipv6diag.data.model.DiagnosticSession
 import com.lenovo.mesh.ipv6diag.data.model.TestResult
 import com.lenovo.mesh.ipv6diag.data.model.TestStatus
+import com.lenovo.mesh.ipv6diag.data.model.XlatChainStatus
+import com.lenovo.mesh.ipv6diag.data.model.XlatDiagnosticSummary
+import com.lenovo.mesh.ipv6diag.data.model.XlatSubTestStatus
 import com.lenovo.mesh.ipv6diag.export.SessionExporter
 import kotlinx.coroutines.launch
 
@@ -52,9 +57,11 @@ fun ResultsScreen(sessionId: String, navController: NavController) {
     val app = context.applicationContext as IPv6DiagApplication
     val scope = rememberCoroutineScope()
     var session by remember { mutableStateOf<DiagnosticSession?>(null) }
+    var xlatSummary by remember { mutableStateOf<XlatDiagnosticSummary?>(null) }
 
     LaunchedEffect(sessionId) {
         session = app.sessionRepository.getSessionById(sessionId)
+        xlatSummary = app.sessionRepository.getXlatSummary(sessionId)
     }
 
     Scaffold(
@@ -94,19 +101,30 @@ fun ResultsScreen(sessionId: String, navController: NavController) {
                 TestResultCard(result)
             }
 
+            // 464XLAT section
+            item {
+                Spacer(Modifier.height(8.dp))
+                XlatSummarySection(xlatSummary)
+            }
+
             item {
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { shareResults(context, s, "text/plain") }, Modifier.weight(1f)) {
-                        Text("Share Text")
-                    }
-                    Button(onClick = { shareResults(context, s, "application/json") }, Modifier.weight(1f)) {
-                        Text("Share JSON")
-                    }
+                    Button(
+                        onClick = { shareResults(context, s, xlatSummary, "text/plain") },
+                        Modifier.weight(1f),
+                    ) { Text("Share Text") }
+                    Button(
+                        onClick = { shareResults(context, s, xlatSummary, "application/json") },
+                        Modifier.weight(1f),
+                    ) { Text("Share JSON") }
                 }
                 OutlinedButton(
                     onClick = {
-                        val clip = ClipData.newPlainText("IPv6 Diagnostic", SessionExporter.exportAsText(s))
+                        val clip = ClipData.newPlainText(
+                            "IPv6 Diagnostic",
+                            SessionExporter.exportAsText(s, xlatSummary),
+                        )
                         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -115,6 +133,97 @@ fun ResultsScreen(sessionId: String, navController: NavController) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun XlatSummarySection(summary: XlatDiagnosticSummary?) {
+    val chainColor = when (summary?.overallStatus) {
+        XlatChainStatus.WORKING -> Color(0xFF388E3C)
+        XlatChainStatus.PARTIAL -> Color(0xFFF57C00)
+        XlatChainStatus.BROKEN -> Color(0xFFD32F2F)
+        XlatChainStatus.ABSENT, null -> Color(0xFF757575)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("464XLAT Diagnostics", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    summary?.overallStatus?.name ?: "NOT RUN",
+                    color = chainColor,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+
+            if (summary == null || summary.nat64Prefix.status == XlatSubTestStatus.SKIPPED) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "464XLAT not detected on this network",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF757575),
+                )
+                return@Card
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+
+            XlatRow("NAT64 Prefix", summary.nat64Prefix.status,
+                summary.nat64Prefix.preferredPrefix ?: "not found")
+            if (summary.nat64Prefix.entries.size > 1) {
+                Text(
+                    "All: ${summary.nat64Prefix.entries.joinToString(", ") { it.prefix }}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            XlatRow("DNS64 Synthesis", summary.dns64Validation.status,
+                summary.dns64Validation.decodedEmbeddedIPv4?.let { "decoded $it" }
+                    ?: summary.dns64Validation.failureReason ?: "")
+
+            val clatDetail = buildString {
+                summary.clatQuality.interfaceMtu?.let { append("mtu=$it") }
+                summary.clatQuality.clatLatencyMs?.let { append(" clat=${it}ms") }
+                summary.clatQuality.nativeIPv6LatencyMs?.let { append(" ipv6=${it}ms") }
+                summary.clatQuality.latencyDeltaMs?.let { append(" Δ${if (it >= 0) "+$it" else "$it"}ms") }
+            }.trim()
+            XlatRow("CLAT Quality", summary.clatQuality.status,
+                clatDetail.ifEmpty { summary.clatQuality.failureReason ?: "" })
+
+            val platDetail = when {
+                summary.platVerification.matchesClatIPv4 ->
+                    "IPv4 match ✓ (${summary.platVerification.decodedEmbeddedIPv4})"
+                summary.platVerification.decodedEmbeddedIPv4 != null ->
+                    "IPv4 mismatch: ${summary.platVerification.decodedEmbeddedIPv4}"
+                else -> summary.platVerification.failureReason ?: ""
+            }
+            XlatRow("PLAT Verified", summary.platVerification.status, platDetail)
+        }
+    }
+}
+
+@Composable
+private fun XlatRow(label: String, status: XlatSubTestStatus, detail: String) {
+    val color = when (status) {
+        XlatSubTestStatus.PASS -> Color(0xFF388E3C)
+        XlatSubTestStatus.FAIL -> Color(0xFFD32F2F)
+        XlatSubTestStatus.SKIPPED -> Color(0xFF757575)
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+        Text(status.name, color = color, style = MaterialTheme.typography.labelSmall)
+    }
+    if (detail.isNotEmpty()) {
+        Text(detail, style = MaterialTheme.typography.bodySmall, color = Color(0xFF616161))
     }
 }
 
@@ -144,9 +253,14 @@ private fun TestResultCard(result: TestResult) {
     }
 }
 
-private fun shareResults(context: Context, session: DiagnosticSession, mimeType: String) {
-    val text = if (mimeType == "application/json") SessionExporter.exportAsJson(session)
-               else SessionExporter.exportAsText(session)
+private fun shareResults(
+    context: Context,
+    session: DiagnosticSession,
+    xlatSummary: XlatDiagnosticSummary?,
+    mimeType: String,
+) {
+    val text = if (mimeType == "application/json") SessionExporter.exportAsJson(session, xlatSummary)
+               else SessionExporter.exportAsText(session, xlatSummary)
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = mimeType
         putExtra(Intent.EXTRA_TEXT, text)

@@ -4,6 +4,7 @@ import com.lenovo.mesh.ipv6diag.data.db.AppDatabase
 import com.lenovo.mesh.ipv6diag.data.db.toEntity
 import com.lenovo.mesh.ipv6diag.data.model.DiagnosticSession
 import com.lenovo.mesh.ipv6diag.data.model.ServerEndpoint
+import com.lenovo.mesh.ipv6diag.data.model.XlatDiagnosticSummary
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.UUID
@@ -60,6 +61,13 @@ class SessionRepository(private val db: AppDatabase) {
     suspend fun clearCustomEndpoint() {
         db.serverEndpointDao().deleteCustom()
     }
+
+    suspend fun saveXlatSummary(summary: XlatDiagnosticSummary) {
+        db.xlatSummaryDao().insert(summary.toEntity())
+    }
+
+    suspend fun getXlatSummary(sessionId: String): XlatDiagnosticSummary? =
+        db.xlatSummaryDao().getBySession(sessionId)?.toModel()
 
     suspend fun seedDefaultEndpointIfNeeded(hostname: String) {
         if (db.serverEndpointDao().getDefault() == null) {
