@@ -1,0 +1,24 @@
+package com.lenovo.mesh.ipv6diag.data.model
+
+import kotlinx.serialization.Serializable
+
+enum class TestType { HTTP, HTTPS, ICMP, DNS }
+
+enum class AddressFamily { IPv4, IPv6, XLAT }
+
+enum class TestStatus { PASS, FAIL, SKIPPED, ABORTED }
+
+@Serializable
+data class TestResult(
+    val id: String,
+    val sessionId: String,
+    val testType: TestType,
+    val addressFamily: AddressFamily,
+    val status: TestStatus,
+    val latencyMs: Long? = null,
+    val failureReason: String? = null,
+    val resolvedAddress: String? = null,
+    val serverConfirmedFamily: String? = null,
+    val packetLoss: Float? = null,
+    val timestamp: Long = System.currentTimeMillis(),
+)

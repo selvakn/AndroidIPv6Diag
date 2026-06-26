@@ -1,0 +1,124 @@
+package com.lenovo.mesh.ipv6diag.data.db
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
+import com.lenovo.mesh.ipv6diag.data.model.AddressFamily
+import com.lenovo.mesh.ipv6diag.data.model.DiagnosticSession
+import com.lenovo.mesh.ipv6diag.data.model.NetworkInfo
+import com.lenovo.mesh.ipv6diag.data.model.ServerEndpoint
+import com.lenovo.mesh.ipv6diag.data.model.SessionStatus
+import com.lenovo.mesh.ipv6diag.data.model.TestResult
+import com.lenovo.mesh.ipv6diag.data.model.TestStatus
+import com.lenovo.mesh.ipv6diag.data.model.TestType
+import kotlinx.serialization.json.Json
+
+private val json = Json { ignoreUnknownKeys = true }
+
+@Entity(tableName = "server_endpoints")
+data class ServerEndpointEntity(
+    @PrimaryKey val id: String,
+    val hostname: String,
+    @ColumnInfo(name = "ipv4_address") val ipv4Address: String? = null,
+    @ColumnInfo(name = "ipv6_address") val ipv6Address: String? = null,
+    @ColumnInfo(name = "http_port") val httpPort: Int = 80,
+    @ColumnInfo(name = "https_port") val httpsPort: Int = 443,
+    @ColumnInfo(name = "is_default") val isDefault: Boolean = false,
+    @ColumnInfo(name = "last_verified") val lastVerified: Long? = null,
+) {
+    fun toModel() = ServerEndpoint(id, hostname, ipv4Address, ipv6Address, httpPort, httpsPort, isDefault, lastVerified)
+}
+
+fun ServerEndpoint.toEntity() = ServerEndpointEntity(id, hostname, ipv4Address, ipv6Address, httpPort, httpsPort, isDefault, lastVerified)
+
+@Entity(
+    tableName = "diagnostic_sessions",
+    foreignKeys = [ForeignKey(
+        entity = ServerEndpointEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["server_id"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index("timestamp"), Index("server_id")],
+)
+data class DiagnosticSessionEntity(
+    @PrimaryKey val id: String,
+    val timestamp: Long,
+    @ColumnInfo(name = "server_id") val serverId: String,
+    @ColumnInfo(name = "network_info") val networkInfoJson: String,
+    val status: String,
+    @ColumnInfo(name = "abort_reason") val abortReason: String? = null,
+) {
+    fun toModel(endpoint: ServerEndpoint, results: List<TestResult>) = DiagnosticSession(
+        id = id,
+        timestamp = timestamp,
+        serverEndpoint = endpoint,
+        networkInfo = json.decodeFromString(networkInfoJson),
+        testResults = results,
+        status = SessionStatus.valueOf(status),
+        abortReason = abortReason,
+    )
+}
+
+fun DiagnosticSession.toEntity() = DiagnosticSessionEntity(
+    id = id,
+    timestamp = timestamp,
+    serverId = serverEndpoint.id,
+    networkInfoJson = json.encodeToString(NetworkInfo.serializer(), networkInfo),
+    status = status.name,
+    abortReason = abortReason,
+)
+
+@Entity(
+    tableName = "test_results",
+    foreignKeys = [ForeignKey(
+        entity = DiagnosticSessionEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["session_id"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index("session_id")],
+)
+data class TestResultEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "session_id") val sessionId: String,
+    @ColumnInfo(name = "test_type") val testType: String,
+    @ColumnInfo(name = "address_family") val addressFamily: String,
+    val status: String,
+    @ColumnInfo(name = "latency_ms") val latencyMs: Long? = null,
+    @ColumnInfo(name = "failure_reason") val failureReason: String? = null,
+    @ColumnInfo(name = "resolved_address") val resolvedAddress: String? = null,
+    @ColumnInfo(name = "server_confirmed_family") val serverConfirmedFamily: String? = null,
+    @ColumnInfo(name = "packet_loss") val packetLoss: Float? = null,
+    val timestamp: Long,
+) {
+    fun toModel() = TestResult(
+        id = id,
+        sessionId = sessionId,
+        testType = TestType.valueOf(testType),
+        addressFamily = AddressFamily.valueOf(addressFamily),
+        status = TestStatus.valueOf(status),
+        latencyMs = latencyMs,
+        failureReason = failureReason,
+        resolvedAddress = resolvedAddress,
+        serverConfirmedFamily = serverConfirmedFamily,
+        packetLoss = packetLoss,
+        timestamp = timestamp,
+    )
+}
+
+fun TestResult.toEntity() = TestResultEntity(
+    id = id,
+    sessionId = sessionId,
+    testType = testType.name,
+    addressFamily = addressFamily.name,
+    status = status.name,
+    latencyMs = latencyMs,
+    failureReason = failureReason,
+    resolvedAddress = resolvedAddress,
+    serverConfirmedFamily = serverConfirmedFamily,
+    packetLoss = packetLoss,
+    timestamp = timestamp,
+)

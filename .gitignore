@@ -1,0 +1,27 @@
+# Go server
+server/bin/
+server/vendor/
+*.exe
+*.test
+*.out
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.iml
+*.jks
+*.keystore
+
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+*.log
+.env
+.env.*
