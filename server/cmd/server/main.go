@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -48,6 +49,12 @@ func main() {
 	reportStore := store.NewReportStore(db)
 	reportsHandler := &handler.ReportsHandler{Store: reportStore}
 
+	// Store the published APK alongside the database on the data volume.
+	apkHandler := &handler.APKHandler{
+		Dir:         filepath.Dir(*dbPath),
+		UploadToken: os.Getenv("APK_UPLOAD_TOKEN"),
+	}
+
 	// Build application muxes
 	httpMux := http.NewServeMux()
 	httpMux.Handle("/diag", &handler.DiagHandler{IsTLS: false})
@@ -55,6 +62,9 @@ func main() {
 	httpMux.Handle("/reports", reportsHandler)
 	httpMux.Handle("/reports/", reportsHandler)
 	httpMux.Handle("/dashboard", &handler.DashboardHandler{})
+	httpMux.Handle("/upload-apk", apkHandler)
+	httpMux.Handle("/download/apk", apkHandler)
+	httpMux.Handle("/apk-info", apkHandler)
 
 	tlsMux := http.NewServeMux()
 	tlsMux.Handle("/diag", &handler.DiagHandler{IsTLS: true})
@@ -62,6 +72,9 @@ func main() {
 	tlsMux.Handle("/reports", reportsHandler)
 	tlsMux.Handle("/reports/", reportsHandler)
 	tlsMux.Handle("/dashboard", &handler.DashboardHandler{})
+	tlsMux.Handle("/upload-apk", apkHandler)
+	tlsMux.Handle("/download/apk", apkHandler)
+	tlsMux.Handle("/apk-info", apkHandler)
 
 	// Resolve TLS config: CertMagic (HTTPS_HOST) > manual cert/key > none
 	var tlsCfg *tls.Config

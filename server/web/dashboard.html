@@ -7,8 +7,11 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #212121; }
-  header { background: #1565C0; color: #fff; padding: 14px 20px; }
+  header { background: #1565C0; color: #fff; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   header h1 { font-size: 1.2rem; font-weight: 600; }
+  .dl-btn { display: inline-flex; align-items: center; gap: 8px; background: #fff; color: #1565C0; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; }
+  .dl-btn:hover { background: #e3f2fd; }
+  .dl-btn small { font-weight: 400; color: #5472a3; }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; padding: 14px 20px; background: #fff; border-bottom: 1px solid #e0e0e0; }
   .toolbar input, .toolbar button { padding: 7px 12px; border: 1px solid #bdbdbd; border-radius: 4px; font-size: 0.9rem; }
   .toolbar button { background: #1565C0; color: #fff; border-color: #1565C0; cursor: pointer; }
@@ -41,7 +44,12 @@
 </style>
 </head>
 <body>
-<header><h1>IPv6 Diagnostic Dashboard</h1></header>
+<header>
+  <h1>IPv6 Diagnostic Dashboard</h1>
+  <a id="dl-apk" class="dl-btn" href="/download/apk" style="display:none">
+    &#11015; Download Android App <small id="dl-apk-meta"></small>
+  </a>
+</header>
 
 <div class="toolbar">
   <label>From</label>
@@ -211,7 +219,25 @@ function clearFilters() {
   loadReports('','','').then(renderList);
 }
 
+// Show the APK download button only when an APK has been published.
+async function loadApkInfo() {
+  try {
+    const r = await fetch('/apk-info');
+    const info = await r.json();
+    if (info && info.available) {
+      const btn = document.getElementById('dl-apk');
+      const meta = document.getElementById('dl-apk-meta');
+      const parts = [];
+      if (info.version) parts.push(info.version);
+      if (info.size_bytes) parts.push((info.size_bytes / 1048576).toFixed(1) + ' MB');
+      meta.textContent = parts.length ? '(' + parts.join(' · ') + ')' : '';
+      btn.style.display = '';
+    }
+  } catch (e) { /* button stays hidden */ }
+}
+
 // Initial load
+loadApkInfo();
 loadReports('','','').then(reports => { allReports = reports; renderList(reports); });
 </script>
 </body>
