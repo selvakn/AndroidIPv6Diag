@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lenovo/mesh/ipv6diag-server/internal/store"
+	"github.com/selvakn/ipv6diag-server/internal/store"
 )
 
 type ReportsHandler struct {

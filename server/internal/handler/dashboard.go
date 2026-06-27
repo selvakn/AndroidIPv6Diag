@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/lenovo/mesh/ipv6diag-server/web"
+	"github.com/selvakn/ipv6diag-server/web"
 )
 
 type DashboardHandler struct{}

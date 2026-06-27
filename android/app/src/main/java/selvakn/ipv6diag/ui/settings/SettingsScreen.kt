@@ -1,0 +1,153 @@
+package selvakn.ipv6diag.ui.settings
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import selvakn.ipv6diag.IPv6DiagApplication
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(navController: NavController) {
+    val context = LocalContext.current
+    val app = context.applicationContext as IPv6DiagApplication
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+
+    var customHostname by remember { mutableStateOf("") }
+    var currentEndpoint by remember { mutableStateOf("") }
+    var isVerifying by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val endpoint = app.sessionRepository.getActiveEndpoint()
+        currentEndpoint = endpoint?.hostname ?: "none"
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Current Server: $currentEndpoint", style = MaterialTheme.typography.bodyMedium)
+
+            Spacer(Modifier.height(8.dp))
+            Text("Custom Server Hostname", style = MaterialTheme.typography.labelMedium)
+
+            OutlinedTextField(
+                value = customHostname,
+                onValueChange = { customHostname = it },
+                label = { Text("e.g. myserver.example.com") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        if (customHostname.isBlank()) {
+                            scope.launch { snackbar.showSnackbar("Enter a hostname first") }
+                            return@Button
+                        }
+                        scope.launch {
+                            isVerifying = true
+                            val reachable = verifyReachability(customHostname)
+                            if (reachable) {
+                                app.sessionRepository.saveCustomEndpoint(customHostname.trim())
+                                currentEndpoint = customHostname.trim()
+                                snackbar.showSnackbar("Custom server saved")
+                            } else {
+                                snackbar.showSnackbar("Server unreachable — saved anyway")
+                                app.sessionRepository.saveCustomEndpoint(customHostname.trim())
+                                currentEndpoint = customHostname.trim()
+                            }
+                            isVerifying = false
+                        }
+                    },
+                    enabled = !isVerifying,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (isVerifying) "Verifying…" else "Save")
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            app.sessionRepository.clearCustomEndpoint()
+                            val default = app.sessionRepository.getActiveEndpoint()
+                            currentEndpoint = default?.hostname ?: "default"
+                            customHostname = ""
+                            snackbar.showSnackbar("Reverted to default server")
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Reset to Default")
+                }
+            }
+        }
+    }
+}
+
+private suspend fun verifyReachability(hostname: String): Boolean =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            OkHttpClient.Builder()
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
+                .build()
+                .newCall(Request.Builder().url("http://$hostname/health").get().build())
+                .execute()
+                .use { it.isSuccessful }
+        }.getOrDefault(false)
+    }

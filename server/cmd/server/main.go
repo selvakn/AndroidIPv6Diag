@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/caddyserver/certmagic"
-	"github.com/lenovo/mesh/ipv6diag-server/internal/handler"
-	"github.com/lenovo/mesh/ipv6diag-server/internal/listener"
-	"github.com/lenovo/mesh/ipv6diag-server/internal/store"
+	"github.com/selvakn/ipv6diag-server/internal/handler"
+	"github.com/selvakn/ipv6diag-server/internal/listener"
+	"github.com/selvakn/ipv6diag-server/internal/store"
 )
 
 var version = "dev"

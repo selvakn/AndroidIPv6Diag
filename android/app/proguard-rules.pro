@@ -1,4 +1,4 @@
--keep class com.lenovo.mesh.ipv6diag.data.model.** { *; }
+-keep class selvakn.ipv6diag.data.model.** { *; }
 -keepattributes *Annotation*
 -keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
 -keepclasseswithmembers class **$$serializer { *; }

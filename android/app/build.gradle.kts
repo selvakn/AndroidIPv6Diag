@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,12 +8,23 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Signing credentials are never committed. They come from a gitignored
+// keystore.properties (local dev) or environment variables (CI). If neither is
+// present, the release build is left unsigned rather than failing — so debug
+// builds and source checkouts work without any secrets.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signingValue(key: String, env: String): String? =
+    keystoreProps.getProperty(key) ?: System.getenv(env)
+
 android {
-    namespace = "com.lenovo.mesh.ipv6diag"
+    namespace = "selvakn.ipv6diag"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.lenovo.mesh.ipv6diag"
+        applicationId = "in.selvakn.ipv6diag"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -20,10 +33,14 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("../release.keystore")
-            storePassword = "ipv6diag2024"
-            keyAlias = "ipv6diag"
-            keyPassword = "ipv6diag2024"
+            val storePath = signingValue("storeFile", "KEYSTORE_FILE")
+            if (storePath != null) {
+                // Resolved against the android/ root project, where the keystore lives.
+                storeFile = rootProject.file(storePath)
+                storePassword = signingValue("storePassword", "KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "KEY_PASSWORD")
+            }
         }
     }
 
@@ -31,7 +48,9 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            // Attach the release signing config only if it was actually configured.
+            val releaseSigning = signingConfigs.getByName("release")
+            signingConfig = if (releaseSigning.storeFile != null) releaseSigning else null
         }
     }
 
