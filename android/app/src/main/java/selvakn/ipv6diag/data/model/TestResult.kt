@@ -2,7 +2,7 @@ package selvakn.ipv6diag.data.model
 
 import kotlinx.serialization.Serializable
 
-enum class TestType { HTTP, HTTPS, ICMP, DNS, NAT64_DISCOVERY, DNS64_VALIDATION, CLAT_QUALITY, PLAT_VERIFICATION }
+enum class TestType { HTTP, HTTPS, ICMP, DNS, STUN, TURN, NAT64_DISCOVERY, DNS64_VALIDATION, CLAT_QUALITY, PLAT_VERIFICATION }
 
 enum class AddressFamily { IPv4, IPv6, XLAT }
 
@@ -20,5 +20,6 @@ data class TestResult(
     val resolvedAddress: String? = null,
     val serverConfirmedFamily: String? = null,
     val packetLoss: Float? = null,
+    val iceCandidates: List<String> = emptyList(),
     val timestamp: Long = System.currentTimeMillis(),
 )

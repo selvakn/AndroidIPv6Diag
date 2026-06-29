@@ -261,6 +261,9 @@ private fun TestResultCard(result: TestResult) {
             result.latencyMs?.let { Text("Latency: ${it}ms", style = MaterialTheme.typography.bodySmall) }
             result.packetLoss?.let { Text("Packet loss: ${(it * 100).toInt()}%", style = MaterialTheme.typography.bodySmall) }
             result.resolvedAddress?.let { Text("Address: $it", style = MaterialTheme.typography.bodySmall) }
+            if (result.iceCandidates.isNotEmpty()) {
+                Text("ICE: ${result.iceCandidates.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+            }
             result.serverConfirmedFamily?.let { Text("Server confirmed: $it", style = MaterialTheme.typography.bodySmall) }
             result.failureReason?.let { Text("Reason: $it", color = Color(0xFFD32F2F), style = MaterialTheme.typography.bodySmall) }
         }

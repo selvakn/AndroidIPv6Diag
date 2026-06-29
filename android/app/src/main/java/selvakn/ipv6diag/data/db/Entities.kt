@@ -98,6 +98,7 @@ data class TestResultEntity(
     @ColumnInfo(name = "resolved_address") val resolvedAddress: String? = null,
     @ColumnInfo(name = "server_confirmed_family") val serverConfirmedFamily: String? = null,
     @ColumnInfo(name = "packet_loss") val packetLoss: Float? = null,
+    @ColumnInfo(name = "ice_candidates") val iceCandidates: List<String> = emptyList(),
     val timestamp: Long,
 ) {
     fun toModel() = TestResult(
@@ -111,6 +112,7 @@ data class TestResultEntity(
         resolvedAddress = resolvedAddress,
         serverConfirmedFamily = serverConfirmedFamily,
         packetLoss = packetLoss,
+        iceCandidates = iceCandidates,
         timestamp = timestamp,
     )
 }
@@ -149,5 +151,6 @@ fun TestResult.toEntity() = TestResultEntity(
     resolvedAddress = resolvedAddress,
     serverConfirmedFamily = serverConfirmedFamily,
     packetLoss = packetLoss,
+    iceCandidates = iceCandidates,
     timestamp = timestamp,
 )

@@ -75,7 +75,7 @@ class DiagnosticRunner(
             val runXlat = filter == TestFilter.XLAT_464 ||
                 (filter == TestFilter.ALL && (networkInfo.clatPresent || networkInfo.hasNativeIPv6))
             val baseTypes = when (filter) {
-                TestFilter.ALL -> listOf(TestType.HTTP, TestType.HTTPS, TestType.ICMP, TestType.DNS)
+                TestFilter.ALL -> listOf(TestType.HTTP, TestType.HTTPS, TestType.ICMP, TestType.DNS, TestType.STUN, TestType.TURN)
                 TestFilter.HTTP_HTTPS -> listOf(TestType.HTTP, TestType.HTTPS)
                 TestFilter.ICMP -> listOf(TestType.ICMP)
                 TestFilter.DNS -> listOf(TestType.DNS)
@@ -100,6 +100,38 @@ class DiagnosticRunner(
                         if (ipv6Addr != null) add(runIcmpTest(sessionId, ipv6Addr, AddressFamily.IPv6))
                     }
                     TestType.DNS -> runDnsTests(context, network, sessionId, endpoint.hostname)
+                    TestType.STUN -> buildList {
+                        if (ipv4Addr != null) add(runStunTest(network, sessionId, ipv4Addr, AddressFamily.IPv4))
+                        if (ipv6Addr != null) add(runStunTest(network, sessionId, ipv6Addr, AddressFamily.IPv6))
+                        if (isEmpty()) {
+                            add(
+                                TestResult(
+                                    id = UUID.randomUUID().toString(),
+                                    sessionId = sessionId,
+                                    testType = TestType.STUN,
+                                    addressFamily = AddressFamily.IPv4,
+                                    status = TestStatus.SKIPPED,
+                                    failureReason = "server unsupported",
+                                )
+                            )
+                        }
+                    }
+                    TestType.TURN -> buildList {
+                        if (ipv4Addr != null) add(runTurnTest(network, sessionId, ipv4Addr, AddressFamily.IPv4))
+                        if (ipv6Addr != null) add(runTurnTest(network, sessionId, ipv6Addr, AddressFamily.IPv6))
+                        if (isEmpty()) {
+                            add(
+                                TestResult(
+                                    id = UUID.randomUUID().toString(),
+                                    sessionId = sessionId,
+                                    testType = TestType.TURN,
+                                    addressFamily = AddressFamily.IPv4,
+                                    status = TestStatus.SKIPPED,
+                                    failureReason = "server unsupported",
+                                )
+                            )
+                        }
+                    }
                     TestType.NAT64_DISCOVERY, TestType.DNS64_VALIDATION,
                     TestType.CLAT_QUALITY, TestType.PLAT_VERIFICATION -> emptyList()
                 }

@@ -55,6 +55,7 @@ object SessionExporter {
                 r.resolvedAddress?.let { add("addr=$it") }
                 r.serverConfirmedFamily?.let { add("server=$it") }
                 r.packetLoss?.let { add("loss=${(it * 100).toInt()}%") }
+                if (r.iceCandidates.isNotEmpty()) add("ice=${r.iceCandidates.joinToString(";")}")
                 r.failureReason?.let { add("reason=$it") }
             }.joinToString(" ")
             appendLine("  [${r.testType}][${r.addressFamily}] $mark  latency=$latency  $extra")
