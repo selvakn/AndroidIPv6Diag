@@ -71,6 +71,23 @@
 
 <script>
 let allReports = [];
+const DASHBOARD_BASE = '/dashboard';
+
+function getReportIdFromPath() {
+  const m = window.location.pathname.match(/^\/dashboard\/([^\/]+)$/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+function reportDetailPath(id) {
+  return `${DASHBOARD_BASE}/${encodeURIComponent(id)}`;
+}
+
+function navigateToList(pushHistory = true) {
+  if (pushHistory && window.location.pathname !== DASHBOARD_BASE) {
+    window.history.pushState({ view: 'list' }, '', DASHBOARD_BASE);
+  }
+  renderList(allReports);
+}
 
 async function loadReports(from, to, device) {
   const params = new URLSearchParams();
@@ -95,7 +112,7 @@ function renderList(reports) {
     const pct = r.total_count > 0 ? Math.round(r.pass_count / r.total_count * 100) : 0;
     const cls = pct === 100 ? 'badge-pass' : 'badge-fail';
     const date = new Date(r.run_timestamp).toLocaleString();
-    return `<tr onclick="showDetail('${r.id}')">
+    return `<tr onclick="showDetail('${r.id}', true)">
       <td>${esc(r.device_name)}</td>
       <td>${esc(r.device_model)}</td>
       <td>${date}</td>
@@ -108,14 +125,24 @@ function renderList(reports) {
   </table>`;
 }
 
-async function showDetail(id) {
+async function showDetail(id, pushHistory = false) {
   const listView = document.getElementById('list-view');
   const detailView = document.getElementById('detail-view');
   listView.style.display = 'none';
   detailView.style.display = '';
   detailView.innerHTML = '<div class="spinner">Loading…</div>';
+  if (pushHistory) {
+    const target = reportDetailPath(id);
+    if (window.location.pathname !== target) {
+      window.history.pushState({ view: 'detail', id }, '', target);
+    }
+  }
 
   const r = await fetch('/reports/' + id);
+  if (!r.ok) {
+    detailView.innerHTML = `<button class="back-btn" onclick="backToList()">&#8592; Back to list</button><div class="empty">Report not found.</div>`;
+    return;
+  }
   const d = await r.json();
 
   const net = d.network || {};
@@ -193,8 +220,7 @@ async function showDetail(id) {
 }
 
 function backToList() {
-  document.getElementById('detail-view').style.display = 'none';
-  document.getElementById('list-view').style.display = '';
+  navigateToList(true);
 }
 
 function kv(k, v) {
@@ -238,7 +264,24 @@ async function loadApkInfo() {
 
 // Initial load
 loadApkInfo();
-loadReports('','','').then(reports => { allReports = reports; renderList(reports); });
+window.addEventListener('popstate', () => {
+  const reportId = getReportIdFromPath();
+  if (reportId) {
+    showDetail(reportId, false);
+  } else {
+    renderList(allReports);
+  }
+});
+
+loadReports('','','').then(reports => {
+  allReports = reports;
+  const reportId = getReportIdFromPath();
+  if (reportId) {
+    showDetail(reportId, false);
+    return;
+  }
+  renderList(reports);
+});
 </script>
 </body>
 </html>
