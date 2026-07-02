@@ -53,6 +53,7 @@ jobs:
           generate_release_notes: true
 
       - name: Upload APK to portal
+        continue-on-error: true
         run: |
           curl -fsSL --retry 3 -X POST \
             -H "Authorization: Bearer ${{ secrets.APK_UPLOAD_TOKEN }}" \
