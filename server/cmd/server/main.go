@@ -50,6 +50,8 @@ func main() {
 	defer db.Close()
 	reportStore := store.NewReportStore(db)
 	reportsHandler := &handler.ReportsHandler{Store: reportStore}
+	browserDiagPageHandler := &handler.BrowserDiagnosticsPageHandler{}
+	browserDiagConfigHandler := &handler.BrowserDiagnosticsConfigHandler{}
 	turnCfg := turnsvc.LoadConfigFromEnv()
 	turnCredentials := turnsvc.NewCredentialManager(turnCfg.Realm, turnCfg.CredentialTTL)
 	turnService := turnsvc.NewService(turnCfg, turnCredentials)
@@ -85,6 +87,8 @@ func main() {
 	httpMux.Handle("/download/apk", apkHandler)
 	httpMux.Handle("/apk-info", apkHandler)
 	httpMux.Handle("/turn/credentials", turnHandler)
+	httpMux.Handle("/browser-diagnostics", browserDiagPageHandler)
+	httpMux.Handle("/browser-diagnostics/config", browserDiagConfigHandler)
 
 	tlsMux := http.NewServeMux()
 	tlsMux.Handle("/diag", &handler.DiagHandler{IsTLS: true})
@@ -97,6 +101,8 @@ func main() {
 	tlsMux.Handle("/download/apk", apkHandler)
 	tlsMux.Handle("/apk-info", apkHandler)
 	tlsMux.Handle("/turn/credentials", turnHandler)
+	tlsMux.Handle("/browser-diagnostics", browserDiagPageHandler)
+	tlsMux.Handle("/browser-diagnostics/config", browserDiagConfigHandler)
 
 	// Resolve TLS config: CertMagic (HTTPS_HOST) > manual cert/key > none
 	var tlsCfg *tls.Config

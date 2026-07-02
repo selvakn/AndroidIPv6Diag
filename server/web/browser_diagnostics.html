@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browser Network Diagnostics</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f4f6f8; color: #1b1f23; }
+  header { background: #0b5fff; color: #fff; padding: 14px 18px; }
+  header h1 { margin: 0; font-size: 1.1rem; }
+  main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+  .card { background: #fff; border-radius: 8px; padding: 14px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; }
+  .row label { font-size: 0.9rem; min-width: 120px; }
+  .row input, .row select, .row button { padding: 8px 10px; border: 1px solid #cfd7df; border-radius: 6px; font-size: 0.9rem; }
+  button { background: #0b5fff; color: #fff; border-color: #0b5fff; cursor: pointer; }
+  button.secondary { background: #6b7280; border-color: #6b7280; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border-bottom: 1px solid #e5e9ef; padding: 8px; text-align: left; font-size: 0.88rem; vertical-align: top; }
+  .status { padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+  .pending { background: #f3f4f6; }
+  .running { background: #dbeafe; color: #1d4ed8; }
+  .passed { background: #dcfce7; color: #166534; }
+  .failed { background: #fee2e2; color: #991b1b; }
+  .timed_out { background: #fef3c7; color: #92400e; }
+  .unsupported { background: #f3e8ff; color: #6b21a8; }
+  .error { color: #b91c1c; font-size: 0.88rem; margin-top: 6px; }
+  .hint { color: #4b5563; font-size: 0.84rem; }
+  .history-item { border: 1px solid #e5e9ef; border-radius: 6px; padding: 8px; margin-bottom: 8px; cursor: pointer; }
+  .history-item:hover { background: #f9fafb; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Browser Network Diagnostics</h1>
+</header>
+<main>
+  <section class="card">
+    <div class="row"><strong>Configuration</strong></div>
+    <div class="row hint" id="config-summary">Loading configuration...</div>
+    <div class="row">
+      <label>Per-test timeout</label>
+      <input id="timeout" type="number" min="1000" step="1000" />
+    </div>
+    <div class="row">
+      <label>Tests</label>
+      <label><input type="checkbox" id="sel-http" checked> HTTP</label>
+      <label><input type="checkbox" id="sel-https" checked> HTTPS</label>
+      <label><input type="checkbox" id="sel-icmp" checked> ICMP-equivalent</label>
+      <label><input type="checkbox" id="sel-stun" checked> STUN</label>
+      <label><input type="checkbox" id="sel-turn" checked> TURN</label>
+    </div>
+    <div class="row">
+      <label>Default target</label>
+      <select id="default-targets"></select>
+    </div>
+    <div class="row">
+      <label>Custom target</label>
+      <input id="custom-target" placeholder="optional URL or stun/turn URI">
+    </div>
+    <div class="row">
+      <button id="run-btn">Run Selected Tests</button>
+      <button id="clear-history-btn" class="secondary">Clear Session History</button>
+    </div>
+    <div class="error" id="run-error"></div>
+  </section>
+
+  <section class="card">
+    <div class="row"><strong>Current Run Results</strong></div>
+    <table>
+      <thead><tr><th>Test</th><th>Target</th><th>Origin</th><th>Status</th><th>Duration</th><th>Reason / Evidence</th></tr></thead>
+      <tbody id="results-body"><tr><td colspan="6">No run started yet.</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="row"><strong>Run History (session only)</strong></div>
+    <div id="history-list" class="hint">No runs yet.</div>
+  </section>
+</main>
+
+<script>
+const HISTORY_KEY = "browser_diag_run_history_v1";
+let config = null;
+let runHistory = [];
+
+function nowIso() { return new Date().toISOString(); }
+function msSince(startIso) { return Date.now() - new Date(startIso).getTime(); }
+function escapeHtml(s) { return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"); }
+
+function loadHistory() {
+  try {
+    runHistory = JSON.parse(sessionStorage.getItem(HISTORY_KEY) || "[]");
+  } catch (_) {
+    runHistory = [];
+  }
+}
+
+function saveHistory() {
+  sessionStorage.setItem(HISTORY_KEY, JSON.stringify(runHistory));
+}
+
+function selectedTests() {
+  const out = [];
+  if (document.getElementById("sel-http").checked) out.push("HTTP");
+  if (document.getElementById("sel-https").checked) out.push("HTTPS");
+  if (document.getElementById("sel-icmp").checked) out.push("ICMP_EQUIV");
+  if (document.getElementById("sel-stun").checked) out.push("STUN");
+  if (document.getElementById("sel-turn").checked) out.push("TURN");
+  return out;
+}
+
+function renderResults(results) {
+  const body = document.getElementById("results-body");
+  if (!results.length) {
+    body.innerHTML = "<tr><td colspan='6'>No run started yet.</td></tr>";
+    return;
+  }
+  body.innerHTML = results.map(r => `
+    <tr>
+      <td>${escapeHtml(r.testType)}</td>
+      <td>${escapeHtml(r.target)}</td>
+      <td>${escapeHtml(r.origin)}</td>
+      <td><span class="status ${r.status}">${escapeHtml(r.status)}</span></td>
+      <td>${r.durationMs != null ? r.durationMs + " ms" : "—"}</td>
+      <td>${escapeHtml(r.reason || r.evidence || "")}</td>
+    </tr>
+  `).join("");
+}
+
+function renderHistory() {
+  const holder = document.getElementById("history-list");
+  if (!runHistory.length) {
+    holder.textContent = "No runs yet.";
+    return;
+  }
+  holder.innerHTML = runHistory.map((run, idx) => {
+    const pass = run.results.filter(r => r.status === "passed").length;
+    return `<div class="history-item" data-index="${idx}">
+      <strong>${new Date(run.startedAt).toLocaleString()}</strong>
+      <div>${run.selectedTests.join(", ")}</div>
+      <div>${pass}/${run.results.length} passed</div>
+    </div>`;
+  }).join("");
+  holder.querySelectorAll(".history-item").forEach(el => {
+    el.addEventListener("click", () => {
+      const index = Number(el.getAttribute("data-index"));
+      renderResults(runHistory[index].results);
+    });
+  });
+}
+
+function timeoutPromise(ms) {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms));
+}
+
+async function runHttpLike(url, timeoutMs) {
+  const start = nowIso();
+  try {
+    const response = await Promise.race([
+      fetch(url, { method: "GET", mode: "no-cors", cache: "no-store" }),
+      timeoutPromise(timeoutMs)
+    ]);
+    return { status: "passed", startedAt: start, endedAt: nowIso(), durationMs: msSince(start), evidence: "Request completed", reason: response ? "" : "" };
+  } catch (err) {
+    const timedOut = String(err && err.message).includes("timeout");
+    return { status: timedOut ? "timed_out" : "failed", startedAt: start, endedAt: nowIso(), durationMs: msSince(start), reason: timedOut ? "Per-test timeout reached" : "Request failed or blocked by browser/network policy" };
+  }
+}
+
+async function runStunOrTurn(targetUrl, timeoutMs, type) {
+  if (!window.RTCPeerConnection) {
+    return { status: "unsupported", startedAt: nowIso(), endedAt: nowIso(), durationMs: 0, reason: "WebRTC unavailable in browser" };
+  }
+  const startedAt = nowIso();
+  let turnCreds = null;
+  if (type === "TURN" && config.turn_credential_mode === "tokenless_endpoint") {
+    try {
+      const resp = await fetch("/turn/credentials");
+      if (resp.ok) {
+        turnCreds = await resp.json();
+      }
+    } catch (_) {}
+  }
+
+  const iceServer = { urls: [targetUrl] };
+  if (type === "TURN" && turnCreds && turnCreds.username && turnCreds.password) {
+    iceServer.username = turnCreds.username;
+    iceServer.credential = turnCreds.password;
+  }
+
+  return new Promise((resolve) => {
+    const pc = new RTCPeerConnection({ iceServers: [iceServer] });
+    let done = false;
+    const stop = (status, reason, evidence) => {
+      if (done) return;
+      done = true;
+      try { pc.close(); } catch (_) {}
+      resolve({ status, reason, evidence, startedAt, endedAt: nowIso(), durationMs: msSince(startedAt) });
+    };
+    const timer = setTimeout(() => stop("timed_out", "Per-test timeout reached"), timeoutMs);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && !done) {
+        clearTimeout(timer);
+        stop("passed", "", "ICE candidate gathered");
+      }
+    };
+    pc.onicecandidateerror = () => {
+      clearTimeout(timer);
+      stop("failed", "ICE candidate error");
+    };
+    pc.createDataChannel("diag");
+    pc.createOffer()
+      .then((offer) => pc.setLocalDescription(offer))
+      .catch(() => {
+        clearTimeout(timer);
+        stop("failed", "Failed to start ICE gathering");
+      });
+  });
+}
+
+function resolveTarget(testType) {
+  const custom = document.getElementById("custom-target").value.trim();
+  if (custom && config.allow_custom_targets) {
+    return { value: custom, origin: "custom" };
+  }
+  const exact = (config.default_targets || []).find(t => t.test_type === testType);
+  if (exact) return { value: exact.value, origin: "default" };
+  const selected = document.getElementById("default-targets").value;
+  return { value: selected, origin: "default" };
+}
+
+async function runOne(testType, timeoutMs) {
+  const target = resolveTarget(testType);
+  const base = { testType, target: target.value, origin: target.origin };
+  if (!target.value) {
+    return { ...base, status: "failed", startedAt: nowIso(), endedAt: nowIso(), durationMs: 0, reason: "No target configured" };
+  }
+  if (testType === "HTTP" || testType === "HTTPS" || testType === "ICMP_EQUIV") {
+    const result = await runHttpLike(target.value, timeoutMs);
+    return { ...base, ...result };
+  }
+  if (testType === "STUN" || testType === "TURN") {
+    const result = await runStunOrTurn(target.value, timeoutMs, testType);
+    return { ...base, ...result };
+  }
+  return { ...base, status: "unsupported", startedAt: nowIso(), endedAt: nowIso(), durationMs: 0, reason: "Unknown test type" };
+}
+
+async function runSelectedTests() {
+  document.getElementById("run-error").textContent = "";
+  const tests = selectedTests();
+  if (!tests.length) {
+    document.getElementById("run-error").textContent = "Select at least one test.";
+    return;
+  }
+
+  const timeoutMs = Number(document.getElementById("timeout").value) || config.per_test_timeout_ms;
+  const run = {
+    runId: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    startedAt: nowIso(),
+    finishedAt: null,
+    selectedTests: tests,
+    results: []
+  };
+
+  const runningRows = tests.map(t => ({ testType: t, target: resolveTarget(t).value, origin: resolveTarget(t).origin, status: "running", durationMs: null, reason: "" }));
+  renderResults(runningRows);
+
+  for (const testType of tests) {
+    const result = await runOne(testType, timeoutMs);
+    run.results.push(result);
+    const incremental = tests.map(t => run.results.find(r => r.testType === t) || { testType: t, target: resolveTarget(t).value, origin: resolveTarget(t).origin, status: "running", durationMs: null, reason: "" });
+    renderResults(incremental);
+  }
+
+  run.finishedAt = nowIso();
+  runHistory.unshift(run);
+  runHistory = runHistory.slice(0, 20);
+  saveHistory();
+  renderHistory();
+}
+
+async function loadConfig() {
+  const resp = await fetch("/browser-diagnostics/config");
+  config = await resp.json();
+  document.getElementById("timeout").value = config.per_test_timeout_ms || 15000;
+  document.getElementById("config-summary").textContent =
+    `Public access: ${config.public_access ? "enabled" : "disabled"} | Custom targets: ${config.allow_custom_targets ? "enabled" : "disabled"} | Rate limiting: ${config.rate_limiting_enabled ? "enabled" : "disabled"}`;
+
+  const select = document.getElementById("default-targets");
+  select.innerHTML = (config.default_targets || []).map(t =>
+    `<option value="${escapeHtml(t.value)}">${escapeHtml(t.test_type)} - ${escapeHtml(t.label)} (${escapeHtml(t.value)})</option>`
+  ).join("");
+}
+
+document.getElementById("run-btn").addEventListener("click", runSelectedTests);
+document.getElementById("clear-history-btn").addEventListener("click", () => {
+  runHistory = [];
+  saveHistory();
+  renderHistory();
+  renderResults([]);
+});
+
+loadHistory();
+renderHistory();
+loadConfig().catch((err) => {
+  document.getElementById("run-error").textContent = "Failed to load configuration: " + err;
+});
+</script>
+</body>
+</html>
