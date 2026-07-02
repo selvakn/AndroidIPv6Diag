@@ -64,3 +64,39 @@ func TestBrowserDiagnosticsConfigHandlerPayload(t *testing.T) {
 		t.Fatalf("unexpected default HTTP target: %s", payload.DefaultTargets[0].Value)
 	}
 }
+
+func TestBrowserDiagnosticsConfigDefaultStunTurnTargets(t *testing.T) {
+	t.Setenv("TURN_ENABLED", "true")
+	t.Setenv("TURN_CREDENTIALS_TOKEN", "")
+	t.Setenv("BROWSER_DIAG_HTTP_TARGET", "")
+	t.Setenv("BROWSER_DIAG_HTTPS_TARGET", "")
+	t.Setenv("BROWSER_DIAG_ICMP_TARGET", "")
+	t.Setenv("BROWSER_DIAG_STUN_TARGET", "")
+	t.Setenv("BROWSER_DIAG_TURN_TARGET", "")
+
+	h := &BrowserDiagnosticsConfigHandler{}
+	req := httptest.NewRequest(http.MethodGet, "/browser-diagnostics/config", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var payload browserDiagConfigResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("invalid payload: %v", err)
+	}
+
+	seen := map[string]string{}
+	for _, t := range payload.DefaultTargets {
+		seen[t.TestType] = t.Value
+	}
+
+	if got := seen["STUN"]; got != "stun:ipv6-diag.r.selvakn.in:3478" {
+		t.Fatalf("unexpected STUN default: %s", got)
+	}
+	if got := seen["TURN"]; got != "turn:ipv6-diag.r.selvakn.in:3478?transport=udp" {
+		t.Fatalf("unexpected TURN default: %s", got)
+	}
+}

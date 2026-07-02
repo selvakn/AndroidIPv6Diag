@@ -10,11 +10,11 @@ All tests execute from the browser client context. This release is intentionally
 
 - `BROWSER_DIAG_ALLOW_CUSTOM_TARGETS` (`true`/`false`, default `true`)
 - `BROWSER_DIAG_PER_TEST_TIMEOUT_MS` (default `15000`)
-- `BROWSER_DIAG_HTTP_TARGET` (default `http://example.com`)
-- `BROWSER_DIAG_HTTPS_TARGET` (default `https://example.com`)
-- `BROWSER_DIAG_ICMP_TARGET` (default `https://example.com`)
-- `BROWSER_DIAG_STUN_TARGET` (default `stun:stun.l.google.com:19302`)
-- `BROWSER_DIAG_TURN_TARGET` (default `turn:127.0.0.1:3478?transport=udp`)
+- `BROWSER_DIAG_HTTP_TARGET` (default `http://ipv6-diag.r.selvakn.in/diag`)
+- `BROWSER_DIAG_HTTPS_TARGET` (default `https://ipv6-diag.r.selvakn.in/diag`)
+- `BROWSER_DIAG_ICMP_TARGET` (default `https://ipv6-diag.r.selvakn.in/diag`)
+- `BROWSER_DIAG_STUN_TARGET` (default `stun:ipv6-diag.r.selvakn.in:3478`)
+- `BROWSER_DIAG_TURN_TARGET` (default `turn:ipv6-diag.r.selvakn.in:3478?transport=udp`)
 
 ## TURN runtime configuration
 

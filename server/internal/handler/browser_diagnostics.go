@@ -76,34 +76,34 @@ func loadDefaultBrowserTargets() []browserDiagTarget {
 		{
 			TestType:         "HTTP",
 			Label:            "Default HTTP",
-			Value:            envOr("BROWSER_DIAG_HTTP_TARGET", "http://example.com"),
+			Value:            envOr("BROWSER_DIAG_HTTP_TARGET", "http://ipv6-diag.r.selvakn.in/diag"),
 			Origin:           "default",
 			EnabledByDefault: true,
 		},
 		{
 			TestType:         "HTTPS",
 			Label:            "Default HTTPS",
-			Value:            envOr("BROWSER_DIAG_HTTPS_TARGET", "https://example.com"),
+			Value:            envOr("BROWSER_DIAG_HTTPS_TARGET", "https://ipv6-diag.r.selvakn.in/diag"),
 			Origin:           "default",
 			EnabledByDefault: true,
 		},
 		{
 			TestType:         "ICMP_EQUIV",
 			Label:            "Default Reachability",
-			Value:            envOr("BROWSER_DIAG_ICMP_TARGET", "https://example.com"),
+			Value:            envOr("BROWSER_DIAG_ICMP_TARGET", "https://ipv6-diag.r.selvakn.in/diag"),
 			Origin:           "default",
 			EnabledByDefault: true,
 		},
 		{
 			TestType:         "STUN",
 			Label:            "Default STUN",
-			Value:            envOr("BROWSER_DIAG_STUN_TARGET", "stun:stun.l.google.com:19302"),
+			Value:            envOr("BROWSER_DIAG_STUN_TARGET", "stun:ipv6-diag.r.selvakn.in:3478"),
 			Origin:           "default",
 			EnabledByDefault: true,
 		},
 	}
 
-	if turnTarget := strings.TrimSpace(envOr("BROWSER_DIAG_TURN_TARGET", "turn:127.0.0.1:3478?transport=udp")); turnTarget != "" {
+	if turnTarget := strings.TrimSpace(envOr("BROWSER_DIAG_TURN_TARGET", "turn:ipv6-diag.r.selvakn.in:3478?transport=udp")); turnTarget != "" {
 		targets = append(targets, browserDiagTarget{
 			TestType:         "TURN",
 			Label:            "Default TURN",
