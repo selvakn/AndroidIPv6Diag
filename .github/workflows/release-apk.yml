@@ -59,7 +59,7 @@ jobs:
             -H "X-App-Version: ${{ steps.ver.outputs.version }}" \
             -H "Content-Type: application/vnd.android.package-archive" \
             --data-binary @android/app/build/outputs/apk/release/app-release.apk \
-            https://androidipv6diag.fly.dev/upload-apk
+            https://ipv6-diag.r.selvakn.in/upload-apk
 
   publish-container:
     runs-on: ubuntu-latest

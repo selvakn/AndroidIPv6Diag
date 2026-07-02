@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="default_server_hostname">androidipv6diag.fly.dev</string>
+    <string name="default_server_hostname">ipv6-diag.r.selvakn.in</string>
     <integer name="default_http_port">80</integer>
     <integer name="default_https_port">443</integer>
     <integer name="max_session_history">50</integer>
